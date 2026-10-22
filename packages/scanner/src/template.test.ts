@@ -13,7 +13,7 @@ browserTests("template signal fixtures", () => {
     server = createServer(async (request, response) => {
       if (request.url === "/favicon.ico") { response.writeHead(404).end(); return; }
       const name = request.url?.slice(1); if (!name || name.includes("..")) { response.writeHead(404).end(); return; }
-      try { response.setHeader("content-type", "text/html"); response.end(await readFile(resolve(process.cwd(), "fixtures/template", name))); }
+      try { response.setHeader("content-type", name.endsWith(".svg") ? "image/svg+xml" : "text/html"); response.end(await readFile(resolve(process.cwd(), "fixtures/template", name))); }
       catch { response.writeHead(404).end(); }
     });
     await new Promise<void>(resolveReady => server.listen(0, "127.0.0.1", resolveReady));

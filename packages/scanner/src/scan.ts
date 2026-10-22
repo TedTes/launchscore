@@ -7,7 +7,7 @@ import { checkPerformance } from "./performance.js";
 import { computeScore } from "./scoring.js";
 import { SsrfGuard } from "./ssrf.js";
 import { checkTemplateSignals } from "./template.js";
-import { METHODOLOGY_VERSION, type Category, type Finding, type ScanResult } from "./types.js";
+import { METHODOLOGY_VERSION, type Category, type Finding, type PerformanceDetails, type ScanResult } from "./types.js";
 
 export type ScanOptions = { psiRuns?: number; timeoutMs?: number; skipSsrfGuard?: boolean };
 
@@ -45,10 +45,11 @@ export async function scan(input: string, options: ScanOptions = {}): Promise<Sc
   const categoryScores: Record<Category, number | null> = { accessibility: null, performance: null, template: null, hygiene: null };
   const findings: Finding[] = [];
   let performanceRuns: number[] | undefined;
+  let performanceDetails: PerformanceDetails | undefined;
   let browser: Browser | undefined;
 
   const performanceWork = checkPerformance(finalUrl, options.psiRuns ?? 3, controller.signal).then(result => {
-    categoryScores.performance = result.score; performanceRuns = result.runs;
+    categoryScores.performance = result.score; performanceRuns = result.runs; performanceDetails = result.details;
   });
   const pageWork = (async () => {
     browser = await chromium.launch({ headless: true });
@@ -85,6 +86,7 @@ export async function scan(input: string, options: ScanOptions = {}): Promise<Sc
     methodologyVersion: METHODOLOGY_VERSION,
     inputUrl, finalUrl, scannedAt: new Date().toISOString(), findings,
     ...breakdown,
-    ...(performanceRuns ? { performanceRuns } : {})
+    ...(performanceRuns ? { performanceRuns } : {}),
+    ...(performanceDetails ? { performanceDetails } : {})
   };
 }

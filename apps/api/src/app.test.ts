@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { consumeRateLimit, createApp, type Database } from "./app.js";
 import { BlockedUrlError } from "@launchscore/scanner";
 
-const result = { methodologyVersion: "1.0.0", inputUrl: "https://example.com/", finalUrl: "https://example.com/", scannedAt: new Date().toISOString(), total: 100, band: "launch-ready", categories: { accessibility: { score: 30, max: 30 }, performance: { score: 25, max: 25 }, template: { score: 25, max: 25 }, hygiene: { score: 20, max: 20 } }, capsApplied: [], findings: [], partial: false, incomplete: [] } as const;
+const result = { methodologyVersion: "1.1.1", inputUrl: "https://example.com/", finalUrl: "https://example.com/", scannedAt: new Date().toISOString(), total: 100, band: "launch-ready", categories: { accessibility: { score: 30, max: 30 }, performance: { score: 25, max: 25 }, template: { score: 25, max: 25 }, hygiene: { score: 20, max: 20 } }, capsApplied: [], findings: [], partial: false, incomplete: [] } as const;
 
 describe("API", () => {
   it("rejects invalid URLs", async () => {
@@ -26,6 +26,8 @@ describe("API", () => {
     const app = createApp({ db: { query }, guardFn: vi.fn() }); const response = await app.inject({ method: "POST", url: "/scan", payload: { url: "https://example.com" } });
     expect(response.json()).toMatchObject({ id: "x", cached: true }); await app.close();
     expect(query.mock.calls[0]?.[0]).toContain("rate_limit_buckets");
+    expect(query.mock.calls[1]?.[0]).toContain("methodologyVersion");
+    expect(query.mock.calls[1]?.[1]).toEqual(["https://example.com/", "1.1.1"]);
   });
   it("gets a scan by id", async () => {
     const id = "978ef99c-8f49-4df5-b235-34e2a3f2a60e"; const db = { query: vi.fn().mockResolvedValue({ rows: [{ id, status: "done", result }], rowCount: 1 }) };

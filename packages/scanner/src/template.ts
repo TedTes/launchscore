@@ -9,13 +9,22 @@ import type { Finding, Severity } from "./types.js";
 
 type Signal = { id: keyof typeof TEMPLATE_DEDUCTIONS; title: string; severity: Severity; evidence: { selector?: string; snippet?: string; url?: string }; fixHint: string };
 
+const RULE_URLS: Record<keyof typeof TEMPLATE_DEDUCTIONS, string> = {
+  "tpl.default-favicon": "https://developer.mozilla.org/docs/Web/HTML/Reference/Attributes/rel#icon",
+  "tpl.builder-badge": "/score/method#template-signals",
+  "tpl.placeholder-copy": "/score/method#template-signals",
+  "tpl.default-theme": "/score/method#template-signals",
+  "tpl.gradient-hero-text": "/score/method#template-signals",
+  "tpl.no-brand-color": "/score/method#template-signals"
+};
+
 const palette = [
   [59, 130, 246], [37, 99, 235], [99, 102, 241], [79, 70, 229],
   [139, 92, 246], [124, 58, 237], [168, 85, 247], [147, 51, 234]
 ];
 
 function finding(signal: Signal): Finding {
-  return { ...signal, category: "template", pointsDeducted: TEMPLATE_DEDUCTIONS[signal.id] };
+  return { ...signal, category: "template", pointsDeducted: TEMPLATE_DEDUCTIONS[signal.id], ruleUrl: RULE_URLS[signal.id] };
 }
 
 export async function checkTemplateSignals(page: Page, finalUrl: string, guard: SsrfGuard, signal?: AbortSignal): Promise<{ score: number; findings: Finding[] }> {
@@ -67,8 +76,7 @@ export async function checkTemplateSignals(page: Page, finalUrl: string, guard: 
   const icons = await page.locator('link[rel~="icon"]').evaluateAll(elements => elements.map(element => (element as HTMLLinkElement).href));
   let faviconProblem: string | undefined;
   const href = icons[0];
-  if (href && /\/(vite|next|react|favicon)\.svg(?:\?|$)/i.test(href)) faviconProblem = href;
-  if (href && !faviconProblem && /^https?:/i.test(href)) {
+  if (href && /^https?:/i.test(href)) {
     try {
       const response = await safeExtraFetch(href, guard, signal);
       if (response.ok) {

@@ -1,4 +1,4 @@
-export const METHODOLOGY_VERSION = "1.0.0" as const;
+export const METHODOLOGY_VERSION = "1.1.1" as const;
 
 export type Category = "accessibility" | "performance" | "template" | "hygiene";
 export type Severity = "critical" | "serious" | "moderate" | "minor" | "info";
@@ -9,6 +9,16 @@ export type Evidence = {
   header?: string;
   url?: string;
   count?: number;
+  status?: number;
+  message?: string;
+};
+
+export type PerformanceDetails = {
+  medianScore: number;
+  runs: number[];
+  requestedRuns: number;
+  metrics: { id: string; title: string; displayValue: string }[];
+  opportunities: { id: string; title: string; displayValue?: string }[];
 };
 
 export type Finding = {
@@ -39,6 +49,7 @@ export type ScanResult = ScoreBreakdown & {
   scannedAt: string;
   findings: Finding[];
   performanceRuns?: number[];
+  performanceDetails?: PerformanceDetails;
 };
 
 export type RawFindings = {

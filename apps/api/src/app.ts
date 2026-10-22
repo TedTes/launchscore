@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import Fastify from "fastify";
-import { assertSafeUrl, BlockedUrlError, InvalidUrlError, normalizeUrl, scan, type ScanResult } from "@launchscore/scanner";
+import { assertSafeUrl, BlockedUrlError, InvalidUrlError, METHODOLOGY_VERSION, normalizeUrl, scan, type ScanResult } from "@launchscore/scanner";
 import { Resend } from "resend";
 import { z } from "zod";
 
@@ -82,7 +82,7 @@ export function createApp({ db, scanFn = scan, guardFn = assertSafeUrl, sendRepo
     const hash = clientHash(request as never);
     const rateLimit = await consumeRateLimit(db, hash, "scan", 5);
     if (!rateLimit.allowed) return reply.code(429).header("retry-after", String(rateLimit.retryAfterSec)).send({ error: "rate_limited", retryAfterSec: rateLimit.retryAfterSec });
-    const cached = await db.query("select id, result from scans where normalized_url=$1 and status='done' and created_at > now() - interval '24 hours' order by created_at desc limit 1", [normalized]);
+    const cached = await db.query("select id, result from scans where normalized_url=$1 and status='done' and result->>'methodologyVersion'=$2 and created_at > now() - interval '24 hours' order by created_at desc limit 1", [normalized, METHODOLOGY_VERSION]);
     if (cached.rowCount) return { id: cached.rows[0].id, cached: true, result: cached.rows[0].result };
     const inserted = await db.query("insert into scans(input_url, normalized_url, ip_hash, status) values($1,$2,$3,'running') returning id", [parsed.data.url, normalized, hash]);
     const id = inserted.rows[0].id as string;

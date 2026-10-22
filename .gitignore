@@ -6,6 +6,7 @@ dist/
 .wrangler/
 .vercel/
 coverage/
+calibration/
 .vitest/
 playwright-report/
 test-results/

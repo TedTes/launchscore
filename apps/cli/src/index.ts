@@ -2,20 +2,28 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { scan, type ScanResult } from "@launchscore/scanner";
+import { buildCalibration } from "./calibrate.js";
 import { reportHtml } from "./report.js";
 
-type Flags = { out: string; runs: number; json: boolean; csv: string; concurrency: number; repeat: number };
-const defaults: Flags = { out: "./reports", runs: 3, json: false, csv: "results.csv", concurrency: 2, repeat: 1 };
+type Flags = { out: string; runs: number; json: boolean; csv: string; concurrency: number; repeat: number; scans: number; threshold: number; url: string };
+const defaults: Flags = { out: "./reports", runs: 3, json: false, csv: "results.csv", concurrency: 2, repeat: 1, scans: 3, threshold: 3, url: "" };
 
 function parse(args: string[]): { positional: string[]; flags: Flags } {
   const flags = { ...defaults }; const positional: string[] = [];
   for (let index = 0; index < args.length; index++) {
     const value = args[index]!;
     if (value === "--json") flags.json = true;
-    else if (["--out", "--runs", "--csv", "--concurrency", "--repeat"].includes(value)) {
+    else if (["--out", "--runs", "--csv", "--concurrency", "--repeat", "--scans", "--threshold", "--url"].includes(value)) {
       const next = args[++index]; if (!next) throw new Error(`${value} requires a value`);
-      if (value === "--out") flags.out = next; else if (value === "--csv") flags.csv = next;
-      else (flags as unknown as Record<string, number>)[value.slice(2)] = Math.max(1, Number.parseInt(next, 10));
+      if (value === "--out") flags.out = next;
+      else if (value === "--csv") flags.csv = next;
+      else if (value === "--url") flags.url = next;
+      else {
+        const parsed = Number.parseInt(next, 10);
+        if (!Number.isFinite(parsed)) throw new Error(`${value} requires an integer`);
+        const minimum = value === "--threshold" ? 0 : value === "--scans" ? 2 : 1;
+        (flags as unknown as Record<string, number>)[value.slice(2)] = Math.max(minimum, parsed);
+      }
     } else positional.push(value);
   }
   return { positional, flags };
@@ -59,10 +67,37 @@ async function batch(file: string, flags: Flags) {
   console.log(`Scanned ${urls.length} URLs; wrote ${flags.csv}`);
 }
 
+async function calibrate(url: string, flags: Flags) {
+  if (!process.env.PSI_API_KEY) throw new Error("PSI_API_KEY is required for calibration");
+  const startedAt = new Date().toISOString();
+  const results: ScanResult[] = [];
+  for (let index = 0; index < flags.scans; index++) {
+    console.log(`Calibration scan ${index + 1}/${flags.scans}...`);
+    const result = await scan(url, { psiRuns: flags.runs });
+    results.push(result);
+    console.log(`  Score ${result.total}/100 · PageSpeed ${result.performanceRuns?.join(", ") || "unavailable"}`);
+  }
+  const calibration = buildCalibration(url, results, {
+    startedAt,
+    completedAt: new Date().toISOString(),
+    requestedScans: flags.scans,
+    psiRunsPerScan: flags.runs,
+    threshold: flags.threshold
+  });
+  const out = flags.out === defaults.out ? "./calibration" : flags.out;
+  await mkdir(out, { recursive: true });
+  const file = resolve(out, `${safeName(results[0]!.finalUrl)}-${stamp()}.json`);
+  await writeFile(file, JSON.stringify(calibration, null, 2));
+  console.log(`Totals: ${calibration.totals.join(", ")} · spread ${calibration.spread} · ${calibration.passed ? "PASS" : "FAIL"}`);
+  console.log(`Wrote ${file}`);
+  if (!calibration.passed) process.exitCode = 2;
+}
+
 async function main() {
   const { positional, flags } = parse(process.argv.slice(2));
-  if (!positional.length || positional.includes("--help")) { console.log("launchscore <url> [--out reports] [--runs 3] [--json] [--repeat 3]\nlaunchscore batch <urls.txt> [--out reports] [--csv results.csv] [--concurrency 2]"); return; }
+  if (!positional.length || positional.includes("--help")) { console.log("launchscore <url> [--out reports] [--runs 3] [--json] [--repeat 3]\nlaunchscore batch <urls.txt> [--out reports] [--csv results.csv] [--concurrency 2]\nlaunchscore calibrate --url <url> [--scans 3] [--runs 3] [--threshold 3] [--out calibration]"); return; }
   if (positional[0] === "batch") { if (!positional[1]) throw new Error("batch requires a URL file"); await batch(positional[1], flags); }
+  else if (positional[0] === "calibrate") { const url = flags.url || positional[1]; if (!url) throw new Error("calibrate requires --url <url>"); await calibrate(url, flags); }
   else await single(positional[0]!, flags);
 }
 

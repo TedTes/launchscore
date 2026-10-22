@@ -81,14 +81,15 @@ gcloud run deploy launch-score-api --source . \
 
 After deployment, set `NEXT_PUBLIC_LAUNCHSCORE_API` to the returned Cloud Run URL.
 
-For Cloudflare Workers Builds, keep the repository root as the working directory and use these commands:
+For Cloudflare Workers Builds, use these settings:
 
 ```text
+Root directory: web
 Build command:  pnpm cf:build
 Deploy command: pnpm cf:deploy
 ```
 
-These commands explicitly target `web/`, whose `wrangler.jsonc` deploys only the `launchscore-web` Worker. Do not use `npx wrangler deploy` from the monorepo root.
+The `web/` root contains the only Wrangler configuration used by this build, and it deploys only the `launchscore-web` Worker. Do not run Wrangler from the monorepo root.
 
 In Google Cloud Billing, create a monthly budget for the project and enable email alerts at multiple thresholds (for example 50%, 80%, and 100%). Budgets alert you; they do not automatically cap spend. Keep Cloud Run at `max-instances=3` as an additional cost and abuse bound.
 

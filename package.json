@@ -6,8 +6,8 @@
   "scripts": {
     "build": "pnpm -r build",
     "calibrate": "pnpm --filter @launchscore/scanner build && pnpm --filter launchscore build && node apps/cli/dist/index.js calibrate",
-    "cf:build": "pnpm --dir web exec opennextjs-cloudflare build",
-    "cf:deploy": "pnpm --dir web exec wrangler deploy",
+    "cf:build": "pnpm --filter web cf:build",
+    "cf:deploy": "pnpm --filter web cf:deploy",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "pnpm --filter @launchscore/scanner build && pnpm -r --filter '!@launchscore/scanner' typecheck"

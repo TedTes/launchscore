@@ -97,4 +97,4 @@ Routes:
 
 Only HTTP(S) default ports are accepted. Before any request, all A and AAAA records are resolved and checked. Literal IPs, local hostnames, private/reserved ranges, unsafe redirect targets, and unsafe browser subrequests are blocked. DNS results are cached only for one scan. `skipSsrfGuard` works only when `NODE_ENV=test`.
 
-The scanner follows at most five redirects and has a hard 90-second cap. Cloud Run uses a 120-second request timeout to leave time for serialization and persistence.
+The scanner follows at most five redirects and has a hard 90-second cap. Cloud Run uses a 120-second request timeout to leave time for serialization and persistence. Scan and email limits use atomic PostgreSQL counter rows keyed by the salted IP hash, so concurrent requests cannot bypass the limit and cached scans are counted too.

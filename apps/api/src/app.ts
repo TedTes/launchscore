@@ -7,6 +7,7 @@ import { z } from "zod";
 type QueryResult = { rows: any[]; rowCount: number | null };
 export type Database = { query(text: string, values?: unknown[]): Promise<QueryResult> };
 type Dependencies = { db: Database; scanFn?: (url: string) => Promise<ScanResult>; guardFn?: (url: string) => Promise<void>; sendReport?: (email: string, url: string) => Promise<void>; logger?: boolean };
+type RateLimitAction = "scan" | "lead";
 
 const scanBody = z.object({ url: z.string().min(1).max(2048) }).strict();
 const leadBody = z.object({ email: z.string().email().max(320), scanId: z.string().uuid() }).strict();
@@ -15,6 +16,35 @@ function clientHash(request: { headers: Record<string, unknown>; ip: string }): 
   const forwarded = request.headers["x-forwarded-for"];
   const ip = (Array.isArray(forwarded) ? forwarded[0] : typeof forwarded === "string" ? forwarded.split(",")[0] : request.ip)?.trim() ?? "unknown";
   return createHash("sha256").update(ip + (process.env.IP_HASH_SALT ?? "dev-only-salt")).digest("hex");
+}
+
+export async function consumeRateLimit(db: Database, ipHash: string, action: RateLimitAction, limit: number, windowSeconds = 3600): Promise<{ allowed: boolean; retryAfterSec: number }> {
+  const consumed = await db.query(`
+    insert into rate_limit_buckets (ip_hash, action, window_started_at, request_count)
+    values ($1, $2, now(), 1)
+    on conflict (ip_hash, action) do update set
+      request_count = case
+        when rate_limit_buckets.window_started_at <= now() - ($3 * interval '1 second') then 1
+        else rate_limit_buckets.request_count + 1
+      end,
+      window_started_at = case
+        when rate_limit_buckets.window_started_at <= now() - ($3 * interval '1 second') then now()
+        else rate_limit_buckets.window_started_at
+      end
+    where rate_limit_buckets.window_started_at <= now() - ($3 * interval '1 second')
+       or rate_limit_buckets.request_count < $4
+    returning request_count
+  `, [ipHash, action, windowSeconds, limit]);
+  if (consumed.rowCount) return { allowed: true, retryAfterSec: windowSeconds };
+
+  const blocked = await db.query(`
+    select greatest(1, ceil(extract(epoch from (
+      window_started_at + ($3 * interval '1 second') - now()
+    ))))::int as retry_after
+    from rate_limit_buckets
+    where ip_hash = $1 and action = $2
+  `, [ipHash, action, windowSeconds]);
+  return { allowed: false, retryAfterSec: blocked.rows[0]?.retry_after ?? windowSeconds };
 }
 
 export function createApp({ db, scanFn = scan, guardFn = assertSafeUrl, sendReport, logger = false }: Dependencies) {
@@ -48,8 +78,8 @@ export function createApp({ db, scanFn = scan, guardFn = assertSafeUrl, sendRepo
     try { await guardFn(normalized); }
     catch (error) { return reply.code(error instanceof BlockedUrlError ? 403 : 400).send({ error: error instanceof BlockedUrlError ? "blocked_url" : "invalid_url" }); }
     const hash = clientHash(request as never);
-    const recent = await db.query("select count(*)::int as count, extract(epoch from (min(created_at) + interval '1 hour' - now()))::int as retry_after from scans where ip_hash=$1 and created_at > now() - interval '1 hour'", [hash]);
-    if ((recent.rows[0]?.count ?? 0) >= 5) return reply.code(429).header("retry-after", String(Math.max(1, recent.rows[0]?.retry_after ?? 3600))).send({ error: "rate_limited", retryAfterSec: Math.max(1, recent.rows[0]?.retry_after ?? 3600) });
+    const rateLimit = await consumeRateLimit(db, hash, "scan", 5);
+    if (!rateLimit.allowed) return reply.code(429).header("retry-after", String(rateLimit.retryAfterSec)).send({ error: "rate_limited", retryAfterSec: rateLimit.retryAfterSec });
     const cached = await db.query("select id, result from scans where normalized_url=$1 and status='done' and created_at > now() - interval '24 hours' order by created_at desc limit 1", [normalized]);
     if (cached.rowCount) return { id: cached.rows[0].id, cached: true, result: cached.rows[0].result };
     const inserted = await db.query("insert into scans(input_url, normalized_url, ip_hash, status) values($1,$2,$3,'running') returning id", [parsed.data.url, normalized, hash]);
@@ -77,8 +107,8 @@ export function createApp({ db, scanFn = scan, guardFn = assertSafeUrl, sendRepo
   app.post("/lead", async (request, reply) => {
     const parsed = leadBody.safeParse(request.body); if (!parsed.success) return reply.code(400).send({ error: "invalid_lead" });
     const hash = clientHash(request as never);
-    const recent = await db.query("select count(*)::int as count from leads where ip_hash=$1 and created_at > now() - interval '1 hour'", [hash]);
-    if ((recent.rows[0]?.count ?? 0) >= 3) return reply.code(429).send({ error: "rate_limited", retryAfterSec: 3600 });
+    const rateLimit = await consumeRateLimit(db, hash, "lead", 3);
+    if (!rateLimit.allowed) return reply.code(429).header("retry-after", String(rateLimit.retryAfterSec)).send({ error: "rate_limited", retryAfterSec: rateLimit.retryAfterSec });
     await db.query("insert into leads(email, scan_id, ip_hash) values($1,$2,$3)", [parsed.data.email, parsed.data.scanId, hash]);
     const reportUrl = `${(process.env.REPORT_BASE_URL ?? "").replace(/\/$/, "")}/score/${parsed.data.scanId}`;
     if (sendReport) await sendReport(parsed.data.email, reportUrl);

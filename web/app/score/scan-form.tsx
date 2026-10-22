@@ -1,6 +1,7 @@
 "use client";
 import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { LAUNCHSCORE_API } from "@/lib/api";
 
 const progress = ["Loading page…", "Checking accessibility…", "Measuring performance…", "Checking launch basics…"];
 const messages: Record<string, string> = {
@@ -14,7 +15,7 @@ export function ScanForm() {
   async function submit(event: FormEvent) {
     event.preventDefault(); setBusy(true); setStep(0); setError("");
     try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_LAUNCHSCORE_API}/scan`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url }) });
+      const response = await fetch(`${LAUNCHSCORE_API}/scan`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ url }) });
       const body = await response.json();
       if (!response.ok) { const suffix = body.error === "rate_limited" && body.retryAfterSec ? ` Try again in ${Math.ceil(body.retryAfterSec / 60)} minutes.` : ""; setError((messages[body.error] ?? messages.scan_failed) + suffix); return; }
       router.push(`/score/${body.id}${body.cached ? "?cached=1" : ""}`);

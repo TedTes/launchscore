@@ -68,7 +68,9 @@ export function createApp({ db, scanFn = scan, guardFn = assertSafeUrl, sendRepo
     "access-control-allow-headers": "content-type"
   }).code(204).send());
 
-  app.get("/healthz", async () => ({ ok: true }));
+  // Cloud Run reserves URL paths ending in "z" and intercepts them before
+  // they reach the container, so use a non-reserved health endpoint.
+  app.get("/health", async () => ({ ok: true }));
 
   app.post("/scan", async (request, reply) => {
     const parsed = scanBody.safeParse(request.body); if (!parsed.success) return reply.code(400).send({ error: "invalid_url" });

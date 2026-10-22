@@ -1,0 +1,12 @@
+{
+  "name": "launchscore",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "bin": { "launchscore": "dist/index.js" },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": { "@launchscore/scanner": "workspace:*" }
+}

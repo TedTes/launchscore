@@ -1,0 +1,5 @@
+[
+  { "name": "shadcn-neutral-oklch-2026", "background": "oklch(1 0 0)", "primary": "oklch(0.205 0 0)", "ring": "oklch(0.708 0 0)" },
+  { "name": "shadcn-slate-hsl", "background": "0 0% 100%", "primary": "222.2 47.4% 11.2%", "ring": "215 20.2% 65.1%" },
+  { "name": "shadcn-zinc-hsl", "background": "0 0% 100%", "primary": "240 5.9% 10%", "ring": "240 5% 64.9%" }
+]

@@ -1,4 +1,5 @@
 {
+  // Dedicated Launch Score Worker; Workers Builds root directory must be `web`.
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "launchscore-web",
   "main": ".open-next/worker.js",
